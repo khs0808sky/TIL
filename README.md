@@ -3,6 +3,7 @@
 ## 📅 목차
 
 - [2025-10-01](#2025-10-01)
+- [2025-10-02](#2025-10-02)
 
 <br><br><br>
 
@@ -328,6 +329,259 @@ test('add', () => {
 * 공통 유틸/타입/상수는 별도 모듈로 분리
 * API 계층: **fetch 래퍼 + 에러 규약** 통일
 * 비동기 로직: **async/await** 일관 사용, 에러 공통 처리기 마련
+
+---
+
+📅[목차로 돌아가기](#-목차)
+
+---
+
+### 2025-10-02
+
+---
+
+## React 한눈에 보기
+
+**React**는 UI를 **컴포넌트** 단위로 쪼개고, **상태(state)** 가 바뀌면 필요한 부분만 다시 렌더링하는 라이브러리야.
+
+### 핵심 개념 요약
+
+* **컴포넌트**: 화면 조각. 함수형 컴포넌트가 표준.
+* **Props**: 부모 → 자식으로 내려주는 읽기 전용 데이터.
+* **State**: 컴포넌트 내부에서 관리하는 변경 가능한 데이터.
+* **렌더링**: `state/props`가 바뀌면 함수가 다시 실행되어 UI가 새로 계산됨.
+* **단방향 데이터 흐름**: 데이터는 위에서 아래로 흐름(부모→자식). 상위로 올리고 싶으면 **state 끌어올리기(lifting)**.
+
+---
+
+## useState 완전 정복
+
+`useState`는 함수형 컴포넌트에서 **상태**를 만들고 업데이트하는 기본 훅이야.
+
+### 1) 기본 사용
+
+```jsx
+import { useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0); // [현재값, setter]
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={() => setCount(count + 1)}>+1</button>
+    </div>
+  );
+}
+```
+
+* `useState(초기값)` → `[state, setState]`
+* `setState(새값)` 호출 시 렌더 트리거
+
+---
+
+### 2) **배칭(Batching)** 과 비동기 업데이트
+
+React 18부터는 **이벤트 루프 내의 여러 setState가 한 번에 배치**되어 렌더가 최소화돼.
+
+```jsx
+// 한 번만 렌더링
+setCount(count + 1);
+setCount(count + 1); // 같은 렌더 사이클에서 count는 여전히 이전 값
+```
+
+연속 업데이트 시에는 **업데이트 함수 형태**(functional update)를 쓰자:
+
+```jsx
+setCount(c => c + 1);
+setCount(c => c + 1); // 최종 +2
+```
+
+---
+
+### 3) **업데이트 함수(Functional Update)** 가 필요한 순간
+
+* 이전 상태값을 기반으로 다음 상태를 계산할 때 **항상** 함수형을 써라.
+* 비동기/지연 로직, 이벤트 핸들러가 복잡할수록 안전하다.
+
+```jsx
+setItems(prev => [...prev, newItem]);
+setOpen(prev => !prev);
+```
+
+---
+
+### 4) **지연 초기화(Lazy Init)** — 무거운 초기값 계산 최적화
+
+초기값 계산이 비싸면 콜백으로 전달:
+
+```jsx
+const [data, setData] = useState(() => expensiveCompute()); // 최초 렌더 1회만 실행
+```
+
+---
+
+### 5) **객체/배열 업데이트: 불변성 유지**
+
+React는 얕은 비교로 변경 여부를 판단하므로 **새 참조**를 만들어야 해.
+
+```jsx
+// 객체
+setUser(u => ({ ...u, name: "철수" }));
+
+// 배열
+setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
+setTodos(ts => ts.filter(t => t.id !== id));
+setTodos(ts => [...ts, { id: Date.now(), text }]);
+```
+
+---
+
+### 6) **파생 상태(Derived State) 피하기**
+
+props나 state로 **계산 가능한 값**은 굳이 또 state로 들고 있지 말자.
+
+```jsx
+// ❌ 파생 상태를 또 들고 있지 말고
+const discounted = price * 0.9; // ✅ 렌더 중 계산
+```
+
+---
+
+### 7) **stale 클로저(오래된 값 캡처)** 주의
+
+비동기 콜백에서 **오래된 state**를 캡처할 수 있어. 함수형 업데이트로 방지.
+
+```jsx
+useEffect(() => {
+  const id = setInterval(() => {
+    setCount(c => c + 1); // 최신 c 사용
+  }, 1000);
+  return () => clearInterval(id);
+}, []);
+```
+
+---
+
+### 8) **상태 올리기(Lifting State Up)** 와 상태 소유권
+
+여러 컴포넌트가 동일한 상태를 필요로 하면 **가까운 공통 부모**로 올려라.
+
+```jsx
+function Parent(){
+  const [value, setValue] = useState("");
+  return (
+    <>
+      <Input value={value} onChange={setValue} />
+      <Preview value={value} />
+    </>
+  );
+}
+```
+
+---
+
+### 9) **useState vs useRef vs useReducer**
+
+* `useState`: 렌더에 영향을 주는 값. 호출 시 렌더 트리거.
+* `useRef`: **변하지만 렌더를 유발하지 않는 값**(타이머 id, DOM 참조, 캐시).
+* `useReducer`: 업데이트 로직이 복잡/여러 액션으로 나뉠 때.
+
+```jsx
+function reducer(state, action){
+  switch(action.type){
+    case "inc": return { ...state, count: state.count + 1 };
+    case "reset": return { ...state, count: 0 };
+    default: return state;
+  }
+}
+```
+
+---
+
+### 10) 입력 폼과 **제어 컴포넌트**
+
+`value`와 `onChange`를 통해 입력값을 **state로 통제**.
+
+```jsx
+function Form() {
+  const [name, setName] = useState("");
+  const onChange = e => setName(e.target.value);
+  return <input value={name} onChange={onChange} placeholder="이름" />;
+}
+```
+
+---
+
+### 11) **성능 팁**
+
+* 연속 setState는 **함수형 업데이트**로 합치기.
+* 무거운 계산은 **지연 초기화** + `useMemo`.
+* 큰 리스트는 **가상 스크롤**(react-window 등).
+* 이벤트 과다 호출은 **디바운스/스로틀** 적용.
+
+---
+
+### 12) **자주 하는 실수 정리**
+
+1. `setState(state + 1)`를 여러 번 연속 호출 → 예상보다 적게 증가
+   → **업데이트 함수 형태** 사용.
+2. 객체/배열을 직접 수정 후 `setState(sameRef)`
+   → 참조가 그대로라 렌더 안 됨. **새 객체/배열 생성**.
+3. 파생 가능한 값을 또 state로 듦
+   → 버그·동기화 이슈. **렌더 중 계산**으로 대체.
+4. 비동기 콜백에서 오래된 state 사용
+   → 함수형 업데이트/의존성 배열 점검.
+
+---
+
+### 13) 미니 실습(짧게)
+
+**(1) +2 버튼 (배칭/함수형 업데이트)**
+
+```jsx
+function PlusTwo(){
+  const [n, setN] = useState(0);
+  const inc2 = () => {
+    setN(v => v + 1);
+    setN(v => v + 1);
+  };
+  return <button onClick={inc2}>{n}</button>;
+}
+```
+
+**(2) Todo 토글/삭제 (불변성)**
+
+```jsx
+function Todos(){
+  const [todos, setTodos] = useState([{id:1, text:"JS"}, {id:2, text:"React"}]);
+
+  const toggle = id =>
+    setTodos(ts => ts.map(t => t.id===id ? {...t, done:!t.done} : t));
+
+  const remove = id =>
+    setTodos(ts => ts.filter(t => t.id!==id));
+
+  return (
+    <ul>
+      {todos.map(t => (
+        <li key={t.id} onClick={() => toggle(t.id)}>
+          {t.text}{t.done ? " ✅" : ""}
+          <button onClick={(e)=>{e.stopPropagation(); remove(t.id);}}>삭제</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+### 14) 기억할 한 문장
+
+> **useState는 “상태값 + setter”를 제공한다.**
+> 이전 값을 기반으로 바꿀 땐 **항상 함수형 업데이트**,
+> 객체/배열은 **불변성 유지**, 무거운 초기화는 **지연 초기화**로!
 
 ---
 
